@@ -1,6 +1,6 @@
 module Lang exposing (..)
 
-import Parser exposing ((|.), (|=), Parser, Step(..), andThen, loop, number, oneOf, problem, spaces, succeed, symbol)
+import Parser exposing ((|.), (|=), Parser, Step(..), Trailing(..), andThen, loop, number, oneOf, problem, spaces, succeed, symbol)
 import Set
 
 
@@ -17,6 +17,12 @@ type Expr
 show : Expr -> String
 show expr =
     case expr of
+        Var s ->
+            s
+
+        Num i ->
+            String.fromInt i
+
         Bin Add a b ->
             "(" ++ show a ++ " + " ++ show b ++ ")"
 
@@ -29,16 +35,28 @@ show expr =
         Bin Div a b ->
             "(" ++ show a ++ " / " ++ show b ++ ")"
 
-        Var s ->
-            s
+        Bin Les a b ->
+            show a ++ " < " ++ show b
 
-        Num i ->
-            String.fromInt i
+        Bin Grt a b ->
+            show a ++ " > " ++ show b
+
+        Bin Leq a b ->
+            show a ++ " <= " ++ show b
+
+        Bin Geq a b ->
+            show a ++ " >= " ++ show b
+
+        Bin Neq a b ->
+            show a ++ " != " ++ show b
+
+        Bin Eq a b ->
+            show a ++ " == " ++ show b
 
 
-parse : String -> Result (List Parser.DeadEnd) (List Statement)
+parse : String -> Result (List Parser.DeadEnd) Statement
 parse =
-    Parser.run statements
+    Parser.run statement
 
 
 notEmpty : ( List a, b ) -> Parser b
@@ -53,7 +71,7 @@ notEmpty ( l, expr ) =
 
 expression : Parser Expr
 expression =
-    termChain
+    chain atom operator
         |> Parser.map (chainLeft <| [ ( Mul, Bin Mul ), ( Div, Bin Div ) ])
         |> Parser.map (chainLeft <| [ ( Add, Bin Add ), ( Sub, Bin Sub ) ])
         |> andThen notEmpty
@@ -141,6 +159,12 @@ type Operator
     | Sub
     | Mul
     | Div
+    | Les
+    | Grt
+    | Leq
+    | Geq
+    | Neq
+    | Eq
 
 
 operator : Parser Operator
@@ -150,6 +174,12 @@ operator =
         , succeed Sub |. symbol "-"
         , succeed Mul |. symbol "*"
         , succeed Div |. symbol "/"
+        , succeed Les |. symbol "<"
+        , succeed Grt |. symbol ">"
+        , succeed Leq |. symbol "<="
+        , succeed Geq |. symbol ">="
+        , succeed Neq |. symbol "!="
+        , succeed Eq |. symbol "="
         ]
 
 
@@ -157,10 +187,21 @@ operator =
 -- Statement
 
 
-type Statement
+type Guard
+    = Guard Expr Statement
+
+
+type SimpleStatement
     = Skip
     | Abort
     | Assignment (List String) (List Expr)
+
+
+type Statement
+    = Seq (List SimpleStatement)
+    | Do (List Guard)
+    | If (List Guard)
+
 
 
 -- sepBy : String -> Parser keep -> Parser (List keep)
@@ -181,7 +222,8 @@ sepByHelp sep parser revParsed =
         , parser |> Parser.map (\parsed -> Done (parsed :: List.reverse revParsed))
         ]
 
-chain : Parser a -> Parser b -> Parser ( List (a, b), a )
+
+chain : Parser a -> Parser b -> Parser ( List ( a, b ), a )
 chain parseA parseB =
     let
         step revOps expr nextOp =
@@ -203,11 +245,19 @@ chain parseA parseB =
                         |. spaces
                     , succeed Nothing
                     ]
-sepBy : String -> Parser keep -> Parser (List keep)
-sepBy sep parser = Parser.map (\(xs, x) -> x :: List.map Tuple.first xs ) <| chain parser (symbol sep)
 
-statement : Parser Statement
-statement =
+
+sepBy : String -> Parser keep -> Parser (List keep)
+sepBy sep parser =
+    Parser.map (\( xs, x ) -> x :: List.map Tuple.first xs) <| chain parser (symbol sep)
+
+
+guard : Parser Guard
+guard =
+    succeed Guard |= expression |. spaces |. symbol "$" |. spaces |= Parser.lazy (\_ -> statement)
+
+
+simpleStatement =
     oneOf
         [ succeed Skip |. symbol "skip"
         , succeed Abort |. symbol "abort"
@@ -220,6 +270,19 @@ statement =
         ]
 
 
-statements : Parser (List Statement)
-statements =
-    sepBy ";" statement
+statement : Parser Statement
+statement =
+    oneOf
+        [ succeed Seq
+            |= sepBy ";" simpleStatement
+        -- Do not working
+        , succeed Do
+            |= Parser.sequence
+                { start = "do"
+                , separator = "|"
+                , end = "od"
+                , spaces = spaces
+                , item = guard
+                , trailing = Mandatory -- demand a trailing semi-colon
+                }
+        ]

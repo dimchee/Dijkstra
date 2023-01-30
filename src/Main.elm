@@ -32,7 +32,12 @@ view : String -> Html.Html Msg
 view model =
     div []
         [ input
-            [ onInput (\s -> Show <| Maybe.map (Debug.toString << Eval.eval Dict.empty) <| Result.toMaybe <| Lang.parse s)
+            [ onInput
+                (Show
+                    << Maybe.map (\statement -> Debug.toString <| Eval.eval statement Dict.empty)
+                    << Result.toMaybe
+                    << Lang.parse
+                )
             ]
             []
         , div [] []

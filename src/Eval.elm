@@ -4,34 +4,73 @@ import Dict
 import Lang
 
 
-evalOp : Lang.Operator -> Int -> Int -> Int
-evalOp op x y =
+type ExprEvaled
+    = EvaledBool Bool
+    | EvaledInt Int
+
+
+evalArith : Lang.Operator -> Int -> Int -> ExprEvaled
+evalArith op x y =
     case op of
         Lang.Add ->
-            x + y
+            EvaledInt <| x + y
 
         Lang.Mul ->
-            x * y
+            EvaledInt <| x * y
 
         Lang.Sub ->
-            x - y
+            EvaledInt <| x - y
 
         Lang.Div ->
-            x // y
+            EvaledInt <| x // y
+
+        Lang.Les ->
+            EvaledBool <| x < y
+
+        Lang.Grt ->
+            EvaledBool <| x > y
+
+        Lang.Leq ->
+            EvaledBool <| x <= y
+
+        Lang.Geq ->
+            EvaledBool <| x >= y
+
+        Lang.Neq ->
+            EvaledBool <| x /= y
+
+        Lang.Eq ->
+            EvaledBool <| x == y
+
+
+evalBool : Lang.Operator -> Bool -> Bool -> Bool
+evalBool op x y =
+    Debug.todo "Bool operations"
+
 
 
 -- Automatically initialize variables to 0
-evalExpr : Context -> Lang.Expr -> Int
+
+
+evalExpr : Context -> Lang.Expr -> Maybe ExprEvaled
 evalExpr context expr =
     case expr of
         Lang.Bin op e1 e2 ->
-            evalOp op (evalExpr context e1) (evalExpr context e2)
+            case ( evalExpr context e1, evalExpr context e2 ) of
+                ( Just (EvaledInt x), Just (EvaledInt y) ) ->
+                    Just <| evalArith op x y
+
+                ( Just (EvaledBool x), Just (EvaledBool y) ) ->
+                    Just <| EvaledBool <| evalBool op x y
+
+                _ ->
+                    Nothing
 
         Lang.Var name ->
-            Maybe.withDefault 0 <| Dict.get name context
+            Maybe.map EvaledInt <| Dict.get name context
 
         Lang.Num x ->
-            x
+            Just <| EvaledInt <| x
 
 
 type alias Context =
@@ -39,13 +78,20 @@ type alias Context =
 
 
 
--- List.map2
+-- Abort semantics is not good
 
-assign : Context -> String -> Lang.Expr -> (String, Int)
-assign context var expr = (var, evalExpr context expr)
 
-evalStatement : Lang.Statement -> Context -> Context
-evalStatement statement context =
+assign : Context -> String -> Lang.Expr -> Maybe ( String, Int )
+assign context var expr =
+    case evalExpr context expr of
+        Just (EvaledInt x) ->
+            Just ( var, x )
+
+        _ ->
+            Nothing
+
+
+evalSimple statement context =
     case statement of
         Lang.Skip ->
             context
@@ -54,7 +100,17 @@ evalStatement statement context =
             Dict.empty
 
         Lang.Assignment vars vals ->
-            Dict.union (Dict.fromList <| List.map2 (assign context) vars vals) context
+            Dict.union (Dict.fromList <| List.filterMap identity <| List.map2 (assign context) vars vals) context
 
-eval : Context -> List Lang.Statement -> Context
-eval context statements = List.foldl evalStatement context statements
+
+eval : Lang.Statement -> Context -> Context
+eval statement context =
+    case statement of
+        Lang.Seq statements ->
+            List.foldr evalSimple context statements
+
+        Lang.Do guards ->
+            Dict.fromList [ ( "radi", 0 ) ]
+
+        Lang.If guards ->
+            Debug.todo "how to eval If"
