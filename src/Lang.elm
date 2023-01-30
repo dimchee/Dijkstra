@@ -1,19 +1,35 @@
 module Lang exposing (..)
 
-import Dict
-import Parser exposing ((|.), (|=), Parser, Step(..), Trailing(..), andThen, loop, number, oneOf, problem, spaces, succeed, symbol)
+import Parser exposing ((|.), (|=), Parser, Step(..), Trailing(..), loop, number, oneOf, spaces, succeed, symbol, lazy)
 import Set
 
 
 
 -- Expr
 
+type Operator
+    = Add | Sub | Mul | Div | Les | Grt | Leq | Geq | Neq | Eq
+operators : List ( Operator, String )
+operators =
+    [ ( Mul, "*" )
+    , ( Div, "/" )
+    , ( Add, "+" )
+    , ( Sub, "-" )
+    , ( Les, "<" )
+    , ( Grt, ">" )
+    , ( Leq, "<=" )
+    , ( Geq, ">=" )
+    , ( Neq, "!=" )
+    , ( Eq, "=" )
+    ]
 
 type Expr
     = Bin Operator Expr Expr
     | Var String
     | Num Int
 
+getOpSymb : Operator -> Maybe String
+getOpSymb op = operators |> List.filter (\(x, _) -> x == op) |> List.head |> Maybe.map Tuple.second
 
 show : Expr -> String
 show expr =
@@ -25,36 +41,9 @@ show expr =
             String.fromInt i
 
         Bin op a b ->
-            "("
-                ++ show a
-                ++ (operatorToStr
-                        |> List.filterMap
-                            (\( x, y ) ->
-                                if x == op then
-                                    Just y
-
-                                else
-                                    Nothing
-                            )
-                        |> List.head
-                        |> Maybe.withDefault "???"
-                   )
-                ++ show b
-                ++ ")"
+            "(" ++ show a ++ (getOpSymb op |> Maybe.withDefault "???") ++ show b ++ ")"
 
 
-notEmpty : SepList a sep -> Parser a
-notEmpty ( x, xs ) =
-    if List.isEmpty xs then
-        succeed x
-
-    else
-        problem "not one expr"
-
-
-expression : Parser Expr
-expression =
-    List.foldl (\ops -> Parser.map (chainLeft ops)) (chain atom operator) operators |> andThen notEmpty
 
 
 type alias SepList a sep =
@@ -71,6 +60,20 @@ sepReverse =
     sepFoldl (\( op, cur ) -> \( prev, acc ) -> ( cur, ( op, prev ) :: acc ))
 
 
+sepCombine : List Operator -> SepList Expr Operator -> SepList Expr Operator
+sepCombine ops =
+    let
+        combine ( op, right ) ( left, remains ) =
+            if List.member op ops then
+                ( Bin op left right, remains )
+
+            else
+                ( right, ( op, left ) :: remains )
+    in
+    sepReverse >> sepFoldl combine
+
+
+step : List (sep, a) -> a -> Maybe sep -> Step (List (sep, a)) (SepList a sep)
 step revOps expr nextOp =
     case nextOp of
         Nothing ->
@@ -86,6 +89,7 @@ chain parseA parseB =
         \revOps ->
             succeed (step revOps)
                 |= parseA
+                |. spaces
                 |= oneOf
                     [ succeed Just
                         |. spaces
@@ -96,30 +100,10 @@ chain parseA parseB =
 
 
 
--- if multiple values  tak es first (maybe should return error?)
+operator : Parser Operator
+operator =
+    oneOf <| List.map (\( op, symb ) -> succeed op |. symbol symb) operators
 
-
-getDict : a -> List ( a, b ) -> Maybe b
-getDict x =
-    List.filter (\( y, _ ) -> x == y) >> List.head >> Maybe.map Tuple.second
-
-
-combine : List Operator -> ( Operator, Expr ) -> SepList Expr Operator -> SepList Expr Operator
-combine ops ( op, right ) ( left, remains ) =
-    if List.member op ops then
-        ( Bin op left right, remains )
-
-    else
-        ( right, ( op, left ) :: remains )
-
-
-chainLeft : List Operator -> SepList Expr Operator -> SepList Expr Operator
-chainLeft ops =
-    sepReverse >> sepFoldl (combine ops)
-
-
-
--->> Tuple.mapSecond List.reverse
 
 
 variable : Parser String
@@ -127,7 +111,7 @@ variable =
     Parser.variable
         { start = Char.isLower
         , inner = Char.isAlphaNum
-        , reserved = Set.fromList [ "do", "od", "if", "fi" ]
+        , reserved = Set.fromList [ "skip", "abort", "do", "od", "if", "fi" ]
         }
 
 
@@ -145,46 +129,15 @@ atom =
             |= variable
         ]
 
-
-type Operator
-    = Add
-    | Sub
-    | Mul
-    | Div
-    | Les
-    | Grt
-    | Leq
-    | Geq
-    | Neq
-    | Eq
-
-
-operatorToStr : List ( Operator, String )
-operatorToStr =
-    [ ( Mul, "*" )
-    , ( Div, "/" )
-    , ( Add, "+" )
-    , ( Sub, "-" )
-    , ( Les, "<" )
-    , ( Grt, ">" )
-    , ( Leq, "<=" )
-    , ( Geq, ">=" )
-    , ( Neq, "!=" )
-    , ( Eq, "=" )
-    ]
-
-
-operators : List (List Operator)
-operators =
-    [ [ Mul, Div ]
-    , [ Add, Sub ]
-    , [ Les, Grt, Leq, Geq, Neq, Eq ]
-    ]
-
-
-operator : Parser Operator
-operator =
-    oneOf <| List.map (\( op, symb ) -> succeed op |. symbol symb) operatorToStr
+-- use andThen for checks
+-- List.foldl (\ops -> Parser.map (sepCombine ops)) (chain atom operator) operators |> andThen notEmpty
+expression : Parser Expr
+expression =
+    chain atom operator
+        |> Parser.map (sepCombine <| [ Mul, Div ])
+        |> Parser.map (sepCombine <| [ Add, Sub ])
+        |> Parser.map (sepCombine <| [ Les, Grt, Leq, Geq, Neq, Eq ])
+        |> Parser.map Tuple.first
 
 
 
@@ -206,65 +159,35 @@ type Statement
     | Do (List Guard)
     | If (List Guard)
 
-
-
--- sepBy : String -> Parser keep -> Parser (List keep)
--- sepBy sep parser =
---     loop [] <| sepByHelp sep parser
-
-
-sepByHelp : String -> Parser keep -> List keep -> Parser (Step (List keep) (List keep))
-sepByHelp sep parser revParsed =
-    oneOf
-        [ succeed (\parsed -> Loop (parsed :: revParsed))
-            |= parser
-            |. spaces
-            |. symbol sep
-            |. spaces
-        , succeed ()
-            |> Parser.map (\_ -> Done (List.reverse revParsed))
-        , parser |> Parser.map (\parsed -> Done (parsed :: List.reverse revParsed))
-        ]
-
-
 sepBy : String -> Parser keep -> Parser (List keep)
 sepBy sep parser =
     Parser.map (\( x, xs ) -> x :: List.map Tuple.second xs) <| chain parser (symbol sep)
 
-
 guard : Parser Guard
 guard =
-    succeed Guard |= expression |. spaces |. symbol "$" |. spaces |= Parser.lazy (\_ -> statement)
+    succeed Guard |=  expression |. spaces |. symbol "~>" |. spaces |= lazy (\_ -> statement)
 
 
 simpleStatement : Parser SimpleStatement
 simpleStatement =
     oneOf
-        [ succeed Skip |. symbol "skip"
-        , succeed Abort |. symbol "abort"
+        [ succeed Skip |. symbol "skip" |. spaces
+        , succeed Abort |. symbol "abort" |. spaces
         , succeed Assignment
             |= sepBy "," variable
             |. spaces
             |. symbol ":="
             |. spaces
             |= sepBy "," expression
+            |. spaces
         ]
-
 
 statement : Parser Statement
 statement =
     oneOf
-        [ succeed Seq
-            |= sepBy ";" simpleStatement
-
-        -- Do not working
+        [ succeed Seq |= sepBy ";" simpleStatement
         , succeed Do
-            |= Parser.sequence
-                { start = "do"
-                , separator = "|"
-                , end = "od"
-                , spaces = spaces
-                , item = guard
-                , trailing = Mandatory -- demand a trailing semi-colon
-                }
+            |. symbol "do" |. spaces |= sepBy "|" guard |. spaces |. symbol "od"
+        , succeed If
+            |. symbol "if" |. spaces |= sepBy "|" guard |. spaces |. symbol "fi"
         ]
