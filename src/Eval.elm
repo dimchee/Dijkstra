@@ -47,11 +47,11 @@ evalArith op x y =
 -- Automaticaly initialize to 0
 
 
-evalExpr : Lang.Context -> Lang.Expr -> Maybe ExprEvaled
-evalExpr context expr =
+evalExpr : Lang.State -> Lang.Expr -> Maybe ExprEvaled
+evalExpr state expr =
     case expr of
         Lang.Bin op e1 e2 ->
-            case ( evalExpr context e1, evalExpr context e2 ) of
+            case ( evalExpr state e1, evalExpr state e2 ) of
                 ( Just (EvaledInt x), Just (EvaledInt y) ) ->
                     Just <| evalArith op x y
 
@@ -61,7 +61,7 @@ evalExpr context expr =
                     Nothing
 
         Lang.Var name ->
-            Just <| EvaledInt <| Maybe.withDefault 0 <| Lang.get name context
+            Just <| EvaledInt <| Maybe.withDefault 0 <| Lang.get name state
 
         Lang.Num x ->
             Just <| EvaledInt <| x
@@ -71,9 +71,9 @@ evalExpr context expr =
 -- Abort semantics is not good
 
 
-assign : Lang.Context -> String -> Lang.Expr -> Maybe ( String, Int )
-assign context var expr =
-    case evalExpr context expr of
+assign : Lang.State -> String -> Lang.Expr -> Maybe ( String, Int )
+assign state var expr =
+    case evalExpr state expr of
         Just (EvaledInt x) ->
             Just ( var, x )
 
@@ -81,42 +81,44 @@ assign context var expr =
             Nothing
 
 
-eval : Lang.Statement -> Lang.Context -> Maybe Lang.Context
-eval statement context =
+eval : Lang.Statement -> Lang.Context -> Lang.Context
+eval st = Lang.andThen (evalInState st)
+
+evalInState : Lang.Statement -> Lang.State -> Lang.Context
+evalInState statement state =
     case statement of
         Lang.Skip ->
-            Just context
+            Lang.Active state
 
         Lang.Abort ->
-            Nothing
+            Lang.Halt
 
         Lang.Assignment vars vals ->
-            List.map2 (assign context) vars vals
+            List.map2 (assign state) vars vals
                 |> List.filterMap identity
-                |> Lang.context
-                |> Lang.overwrite context
-                |> Just
+                |> Dict.fromList
+                |> Lang.overwrite state
 
         Lang.Seq statements ->
-            List.foldr (\st -> Maybe.andThen (eval st)) (Just context) statements
+            List.foldr (\st -> Lang.andThen (evalInState st)) (Lang.Active state) statements
 
         Lang.Do guards ->
-            List.filterMap (validGuards context) guards
+            List.filterMap (validGuards state) guards
                 |> List.head
-                |> Maybe.andThen (\st -> eval st context)
-                |> Maybe.andThen (\new -> eval (Lang.Do guards) new)
-                |> Maybe.withDefault context
-                |> Just
+                |> Maybe.map (\st -> evalInState st state)
+                |> Maybe.map (\new -> eval (Lang.Do guards) new)
+                |> Maybe.withDefault (Lang.Active state)
 
         Lang.If guards ->
-            List.filterMap (validGuards context) guards
+            List.filterMap (validGuards state) guards
                 |> List.head
-                |> Maybe.andThen (\st -> eval st context)
+                |> Maybe.map (\st -> evalInState st state)
+                |> Maybe.withDefault Lang.Halt
 
 
-validGuards : Lang.Context -> Lang.Guard -> Maybe Lang.Statement
-validGuards context (Lang.Guard expr statements) =
-    case evalExpr context expr of
+validGuards : Lang.State -> Lang.Guard -> Maybe Lang.Statement
+validGuards state (Lang.Guard expr statements) =
+    case evalExpr state expr of
         Just (EvaledBool True) ->
             Just statements
 

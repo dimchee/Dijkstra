@@ -1,10 +1,10 @@
 module Lang exposing (..)
+
 -- TODO andThen for checks
 
 import Dict
 import Parser exposing ((|.), (|=), Parser, Step(..), Trailing(..), lazy, loop, number, oneOf, spaces, succeed, symbol)
 import Set
-
 
 
 type alias SepList a sep =
@@ -62,6 +62,8 @@ chain parseA parseB =
                         |. spaces
                     , succeed Nothing
                     ]
+
+
 type Operator
     = Add
     | Sub
@@ -73,6 +75,7 @@ type Operator
     | Geq
     | Neq
     | Eq
+
 
 type Expr
     = Bin Operator Expr Expr
@@ -93,6 +96,7 @@ operators =
     , ( Neq, "!=" )
     , ( Eq, "=" )
     ]
+
 
 getOpSymb : Operator -> Maybe String
 getOpSymb op =
@@ -141,7 +145,6 @@ atom =
         ]
 
 
-
 expression : Parser Expr
 expression =
     chain atom operator
@@ -150,8 +153,10 @@ expression =
         |> Parser.map (sepCombine <| [ Les, Grt, Leq, Geq, Neq, Eq ])
         |> Parser.map Tuple.first
 
+
 type Guard
     = Guard Expr Statement
+
 
 type Statement
     = Skip
@@ -193,7 +198,11 @@ statementSimple =
             |. spaces
             |= sepBy "," expression
             |. spaces
-        ] -- |. spaces -- remove spaces from every other
+        ]
+
+
+
+-- |. spaces -- remove spaces from every other
 
 
 statement : Parser Statement
@@ -211,20 +220,37 @@ parseExpr =
     Parser.run (expression |. Parser.end)
 
 
-type alias Context =
-    Dict.Dict String Int
+type alias State = (Dict.Dict String Int)
+
+type Context
+    = Halt
+    | Active State
 
 
 context : List ( String, Int ) -> Context
 context =
-    Dict.fromList
+    Dict.fromList >> Active
 
 
-get : String -> Context -> Maybe Int
-get =
-    Dict.get
+get : String -> State -> Maybe Int
+get name state = Dict.get name state
+
+andThen : (State -> Context) -> Context -> Context
+andThen f cont = case cont of
+        Active state ->
+            f state
+        Halt -> Halt
+
+mapActive : (State -> State) -> Context -> Context
+mapActive f cont =
+    case cont of
+        Active state ->
+            Active <| f state
+
+        Halt ->
+            Halt
 
 
-overwrite : Context -> Context -> Context
-overwrite c1 c2 =
-    Dict.union c2 c1
+overwrite : State -> State -> Context
+overwrite dict1 dict2 =
+    Dict.union dict2 dict1 |> Active

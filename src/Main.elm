@@ -2,10 +2,12 @@ module Main exposing (..)
 
 import Browser
 import Browser.Dom
+import Dict exposing (Dict)
 import Editor
 import Eval
 import Html exposing (Html)
 import Lang
+import Parser
 import Task
 
 
@@ -33,21 +35,49 @@ viewExecutionResultDebug model =
         |> Html.text
 
 
-viewContext : Maybe Lang.Context -> Html Editor.Msg
-viewContext m = case m of
-    Just context ->
-        Html.div []
-            [ Html.text <| Debug.toString <| context
-            ]
-    Nothing -> Html.text "ERROR"
+viewState : Lang.State -> Html Editor.Msg
+viewState state =
+    state |> Dict.toList |> List.map (\ass -> Html.li [] [ Html.text <| Debug.toString ass ]) |> Html.ul []
+
+
+viewContext : Lang.Context -> Html Editor.Msg
+viewContext context =
+    case context of
+        Lang.Active state ->
+            viewState state
+
+        Lang.Halt ->
+            Html.text "Halted"
+
+
+viewParsingError : Parser.DeadEnd -> Html Editor.Msg
+viewParsingError err =
+    Html.li [] [ Html.text <| Debug.toString err ]
+
+
+viewParsingErrors : List Parser.DeadEnd -> Html Editor.Msg
+viewParsingErrors =
+    List.map viewParsingError >> Html.ul []
+
+
+unwrapResult : Result a a -> a
+unwrapResult res =
+    case res of
+        Result.Ok x ->
+            x
+
+        Result.Err x ->
+            x
+
 
 viewExecutionResult : Editor.Model -> Html Editor.Msg
 viewExecutionResult model =
     Editor.getText model
         |> Lang.parse
         |> Result.map (\statement -> Lang.context [] |> Eval.eval statement)
-        |> Result.withDefault Nothing
-        |> viewContext
+        |> Result.mapError viewParsingErrors
+        |> Result.map viewContext
+        |> unwrapResult
 
 
 view : Editor.Model -> Browser.Document Editor.Msg
