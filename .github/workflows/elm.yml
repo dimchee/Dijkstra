@@ -34,6 +34,8 @@ jobs:
         uses: actions/configure-pages@v3
       - name: Install Elm
         uses: justgook/setup-elm@1.2.0
+        with:
+          cache: false
       - name: Make Elm page
         run: elm make src/Main.elm
       - name: Upload artifact
