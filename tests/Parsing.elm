@@ -57,6 +57,11 @@ exprTest =
                 parseExpr "1 + 2 < 10"
                     |> Expect.equal (Bin Les (Bin Add (Num 1) (Num 2)) (Num 10))
             )
+        , test "fuzzy"
+            (\_ ->
+                Lang.parseExpr "4if"
+                    |> Expect.err
+            )
         ]
 
 

@@ -49,4 +49,11 @@ doTest =
                     |> (\st -> Eval.eval st empty)
                     |> Expect.equal (Just <| valued "a" 3)
             )
+        , test "Euclids algorithm"
+            (\_ ->
+                Lang.parse "a, b := 30, 18;  do a > b ~> a := a - b | b > a ~> b := b - a od"
+                    |> Result.withDefault testStatement
+                    |> (\st -> Eval.eval st empty)
+                    |> Expect.equal (Just <| Lang.context [("a", 6), ("b", 6)])
+            )
         ]

@@ -5,56 +5,6 @@ import Dict
 import Parser exposing ((|.), (|=), Parser, Step(..), Trailing(..), lazy, loop, number, oneOf, spaces, succeed, symbol)
 import Set
 
-type Operator
-    = Add
-    | Sub
-    | Mul
-    | Div
-    | Les
-    | Grt
-    | Leq
-    | Geq
-    | Neq
-    | Eq
-
-
-operators : List ( Operator, String )
-operators =
-    [ ( Mul, "*" )
-    , ( Div, "/" )
-    , ( Add, "+" )
-    , ( Sub, "-" )
-    , ( Les, "<" )
-    , ( Grt, ">" )
-    , ( Leq, "<=" )
-    , ( Geq, ">=" )
-    , ( Neq, "!=" )
-    , ( Eq, "=" )
-    ]
-
-
-type Expr
-    = Bin Operator Expr Expr
-    | Var String
-    | Num Int
-
-
-getOpSymb : Operator -> Maybe String
-getOpSymb op =
-    operators |> List.filter (\( x, _ ) -> x == op) |> List.head |> Maybe.map Tuple.second
-
-
-show : Expr -> String
-show expr =
-    case expr of
-        Var s ->
-            s
-
-        Num i ->
-            String.fromInt i
-
-        Bin op a b ->
-            "(" ++ show a ++ (getOpSymb op |> Maybe.withDefault "???") ++ show b ++ ")"
 
 
 type alias SepList a sep =
@@ -112,6 +62,54 @@ chain parseA parseB =
                         |. spaces
                     , succeed Nothing
                     ]
+type Operator
+    = Add
+    | Sub
+    | Mul
+    | Div
+    | Les
+    | Grt
+    | Leq
+    | Geq
+    | Neq
+    | Eq
+
+type Expr
+    = Bin Operator Expr Expr
+    | Var String
+    | Num Int
+
+
+operators : List ( Operator, String )
+operators =
+    [ ( Mul, "*" )
+    , ( Div, "/" )
+    , ( Add, "+" )
+    , ( Sub, "-" )
+    , ( Les, "<" )
+    , ( Grt, ">" )
+    , ( Leq, "<=" )
+    , ( Geq, ">=" )
+    , ( Neq, "!=" )
+    , ( Eq, "=" )
+    ]
+
+getOpSymb : Operator -> Maybe String
+getOpSymb op =
+    operators |> List.filter (\( x, _ ) -> x == op) |> List.head |> Maybe.map Tuple.second
+
+
+show : Expr -> String
+show expr =
+    case expr of
+        Var s ->
+            s
+
+        Num i ->
+            String.fromInt i
+
+        Bin op a b ->
+            "(" ++ show a ++ (getOpSymb op |> Maybe.withDefault "???") ++ show b ++ ")"
 
 
 operator : Parser Operator
@@ -200,17 +198,17 @@ statementSimple =
 
 statement : Parser Statement
 statement =
-    succeed Seq |= sepBy ";" statementSimple
+    succeed Seq |= sepBy ";" statementSimple |. spaces
 
 
 parse : String -> Result (List Parser.DeadEnd) Statement
 parse =
-    Parser.run statement
+    Parser.run (statement |. Parser.end)
 
 
 parseExpr : String -> Result (List Parser.DeadEnd) Expr
 parseExpr =
-    Parser.run expression
+    Parser.run (expression |. Parser.end)
 
 
 type alias Context =
