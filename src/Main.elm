@@ -1,57 +1,62 @@
 module Main exposing (..)
 
 import Browser
-import Dict
+import Browser.Dom
+import Editor
 import Eval
-import Html exposing (button, div, input, text)
-import Html.Attributes exposing (attribute)
-import Html.Events exposing (onClick, onInput)
+import Html exposing (Html)
 import Lang
-import Parser
+import Task
 
 
-main : Program () String Msg
+main : Program () Editor.Model Editor.Msg
 main =
-    Browser.sandbox
-        { init = ""
-        , update = update
+    Browser.document
+        { init =
+            \() ->
+                ( Editor.init
+                , Browser.Dom.focus "editor"
+                    |> Task.attempt (always Editor.NoOp)
+                )
+        , update = Editor.update
         , view = view
+        , subscriptions = \_ -> Sub.none
         }
 
 
-type Msg
-    = Show (Result (List Parser.DeadEnd) String)
+viewExecutionResultDebug : Editor.Model -> Html Editor.Msg
+viewExecutionResultDebug model =
+    Editor.getText model
+        |> Lang.parse
+        |> Result.map (\statement -> Lang.context [] |> Eval.eval statement)
+        |> Debug.toString
+        |> Html.text
 
 
-update : Msg -> a -> String
-update msg _ =
-    case msg of
-        Show expr ->
-            Debug.toString expr
+viewContext : Maybe Lang.Context -> Html Editor.Msg
+viewContext m = case m of
+    Just context ->
+        Html.div []
+            [ Html.text <| Debug.toString <| context
+            ]
+    Nothing -> Html.text "ERROR"
+
+viewExecutionResult : Editor.Model -> Html Editor.Msg
+viewExecutionResult model =
+    Editor.getText model
+        |> Lang.parse
+        |> Result.map (\statement -> Lang.context [] |> Eval.eval statement)
+        |> Result.withDefault Nothing
+        |> viewContext
 
 
-view : String -> Html.Html Msg
+view : Editor.Model -> Browser.Document Editor.Msg
 view model =
-    div []
-        [ input
-            [ onInput
-                (Show
-                    << Result.map Debug.toString
-                    -- << Result.toMaybe
-                    << Lang.parseExpr
-                )
-            ]
-            []
-        , input
-            [ onInput
-                (Show
-                    << Result.map (\statement -> Debug.toString <| Eval.eval statement Dict.empty)
-                    -- << Result.map Debug.toString
-                    -- << Result.toMaybe
-                    << Lang.parse
-                )
-            ]
-            []
-        , div [] []
-        , text model
+    { title = "Dijkstra's Legacy"
+    , body =
+        [ Editor.view model
+        , viewExecutionResult model
+
+        --, Editor.viewDebug model
         ]
+    }
