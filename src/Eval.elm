@@ -43,15 +43,11 @@ evalArith op x y =
             EvaledBool <| x == y
 
 
-evalBool : Lang.Operator -> Bool -> Bool -> Bool
-evalBool op x y =
-    Debug.todo "Bool operations"
 
-
-
+-- evalBool : Lang.Operator -> Bool -> Bool -> Bool
+-- evalBool op x y =
+--     Debug.todo "Bool operations"
 -- Automatically initialize variables to 0
-
-
 evalExpr : Context -> Lang.Expr -> Maybe ExprEvaled
 evalExpr context expr =
     case expr of
@@ -60,9 +56,8 @@ evalExpr context expr =
                 ( Just (EvaledInt x), Just (EvaledInt y) ) ->
                     Just <| evalArith op x y
 
-                ( Just (EvaledBool x), Just (EvaledBool y) ) ->
-                    Just <| EvaledBool <| evalBool op x y
-
+                -- ( Just (EvaledBool x), Just (EvaledBool y) ) ->
+                --     Just <| EvaledBool <| evalBool op x y
                 _ ->
                     Nothing
 
@@ -91,6 +86,7 @@ assign context var expr =
             Nothing
 
 
+evalSimple : Lang.SimpleStatement -> Context -> Context
 evalSimple statement context =
     case statement of
         Lang.Skip ->
@@ -110,7 +106,15 @@ eval statement context =
             List.foldr evalSimple context statements
 
         Lang.Do guards ->
-            Dict.fromList [ ( "radi", 0 ) ]
+            List.filterMap (validGuards context) guards |> List.head
+                |> Maybe.map (\st -> eval st context) |> Maybe.withDefault context
 
         Lang.If guards ->
-            Debug.todo "how to eval If"
+            List.filterMap (validGuards context) guards |> List.head
+                |> Maybe.map (\st -> eval st context) |> Maybe.withDefault Dict.empty
+
+validGuards : Context -> Lang.Guard -> Maybe Lang.Statement
+validGuards context (Lang.Guard expr statements) =
+    case evalExpr context expr of
+        Just (EvaledBool True) -> Just statements
+        _ -> Nothing
