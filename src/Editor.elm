@@ -17,9 +17,10 @@ lineHeight =
     fontSize * 1.2
 
 
-getText : Model -> String
+getText : { a | lines : Array String } -> String
 getText { lines } =
-    Array.foldr (\line -> \acc -> line ++ " " ++ acc) "" lines
+    Array.toList lines
+        |> String.join "\n"
         |> String.replace "\t" " "
 
 

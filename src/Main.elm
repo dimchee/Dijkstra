@@ -2,13 +2,15 @@ module Main exposing (..)
 
 import Browser
 import Browser.Dom
-import Dict exposing (Dict)
+import Dict
 import Editor
 import Eval
 import Html exposing (Html)
+import Html.Attributes as HA
 import Lang
 import Parser
 import Task
+import Html.Events as HE
 
 
 main : Program () Editor.Model Editor.Msg
@@ -37,27 +39,92 @@ viewExecutionResultDebug model =
 
 viewState : Lang.State -> Html Editor.Msg
 viewState state =
-    state |> Dict.toList |> List.map (\ass -> Html.li [] [ Html.text <| Debug.toString ass ]) |> Html.ul []
+    state
+        |> Dict.toList
+        |> List.map (\( var, val ) -> Html.li [] [ Html.text <| var ++ " = " ++ String.fromInt val ])
+        |> Html.ul []
+
+
+fromContext : a -> (Lang.State -> a) -> Lang.Context -> a
+fromContext onHalt onActive context =
+    case context of
+        Lang.Active state ->
+            onActive state
+
+        Lang.Halt ->
+            onHalt
 
 
 viewContext : Lang.Context -> Html Editor.Msg
 viewContext context =
-    case context of
-        Lang.Active state ->
-            viewState state
+    Html.details
+        [ HA.style "cursor" "pointer"
+        , HA.style "box-shadow" "3px 3px 4px black"
+        , HA.style "background-color" "#ddd"
 
-        Lang.Halt ->
-            Html.text "Halted"
+        -- , HA.style "width" "30em"
+        , HA.style "margin" "0.5em"
+        , HA.style "padding" "0.2em 1em"
+        ]
+        [ fromContext (Html.text "Halted") viewState context
+        , Html.summary
+            [ HA.style "border" "none"
+            , HA.style "color" "#B22222"
+            , HA.style "list-style" "none"
+            ]
+            [ Html.text <| "State: "
+            , Html.select [] []
+            ]
+        ]
 
 
 viewParsingError : Parser.DeadEnd -> Html Editor.Msg
-viewParsingError err =
-    Html.li [] [ Html.text <| Debug.toString err ]
+viewParsingError { col, problem, row } =
+    Html.li
+        [
+        -- [ HE.onClick <| Editor.GoToPosition { line = row, column = col }
+        -- , HE.onMouseOver <| Editor.Hover <| Editor.HoverChar { line = 0, column = 3 }
+        ]
+        [ Html.text <|
+            String.fromInt col
+                ++ ","
+                ++ String.fromInt row
+                ++ ": "
+                ++ Debug.toString problem
+        ]
 
 
 viewParsingErrors : List Parser.DeadEnd -> Html Editor.Msg
-viewParsingErrors =
-    List.map viewParsingError >> Html.ul []
+viewParsingErrors errors =
+    Html.details
+        [ HA.style "cursor" "pointer"
+        , HA.style "box-shadow" "3px 3px 4px black"
+        , HA.style "background-color" "#ddd"
+
+        -- , HA.style "width" "30em"
+        , HA.style "margin" "0.5em"
+        , HA.style "padding" "0.2em 1em"
+        ]
+        [ errors |> List.map viewParsingError |> Html.ul []
+        , Html.summary
+            [ HA.style "width" "15em"
+            , HA.style "border" "none"
+            , HA.style "color" "#B22222"
+            , HA.style "list-style" "none"
+            ]
+            [ Html.text <| "Error parsing, posibilities: " ++ (errors |> List.length |> String.fromInt)
+            ]
+        ]
+
+
+errorOr : err -> Result err b -> err
+errorOr err res =
+    case res of
+        Result.Ok _ ->
+            err
+
+        Result.Err x ->
+            x
 
 
 unwrapResult : Result a a -> a
@@ -68,6 +135,23 @@ unwrapResult res =
 
         Result.Err x ->
             x
+
+
+viewResultsAndErrors : Editor.Model -> Html Editor.Msg
+viewResultsAndErrors model =
+    let
+        res =
+            Editor.getText model
+                |> Lang.parse
+                |> Result.map (\statement -> Lang.context [] |> Eval.eval statement)
+    in
+    Html.div
+        [-- [ HA.style "display" "flex"
+         -- , HA.style "flex-direction" "vertical"
+        ]
+        [ res |> Result.withDefault (Lang.context []) |> viewContext
+        , res |> errorOr [] |> viewParsingErrors
+        ]
 
 
 viewExecutionResult : Editor.Model -> Html Editor.Msg
@@ -85,7 +169,7 @@ view model =
     { title = "Dijkstra's Legacy"
     , body =
         [ Editor.view model
-        , viewExecutionResult model
+        , viewResultsAndErrors model
 
         --, Editor.viewDebug model
         ]
