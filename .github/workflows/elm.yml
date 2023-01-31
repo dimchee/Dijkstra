@@ -32,10 +32,10 @@ jobs:
         uses: actions/checkout@v3
       - name: Setup Pages
         uses: actions/configure-pages@v3
-      - name: Install Elm
-        uses: justgook/setup-elm@1.2.0
-        with:
-          cache: false
+      - name: Install Node
+        uses: actions/setup-node@v3
+      - name: Install elm
+        run: npm install -g elm@0.19.1
       - name: Make Elm page
         run: elm make src/Main.elm
       - name: Upload artifact
