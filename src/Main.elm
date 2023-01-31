@@ -36,9 +36,9 @@ view model =
         [ input
             [ onInput
                 (Show
-                    << Result.map (\expr -> Debug.toString expr)
+                    << Result.map Debug.toString
                     -- << Result.toMaybe
-                    << Parser.run Lang.expression
+                    << Lang.parseExpr
                 )
             ]
             []
@@ -46,8 +46,9 @@ view model =
             [ onInput
                 (Show
                     << Result.map (\statement -> Debug.toString <| Eval.eval statement Dict.empty)
+                    -- << Result.map Debug.toString
                     -- << Result.toMaybe
-                    << Parser.run Lang.statement
+                    << Lang.parse
                 )
             ]
             []

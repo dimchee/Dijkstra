@@ -44,11 +44,10 @@ evalArith op x y =
 
 
 
--- evalBool : Lang.Operator -> Bool -> Bool -> Bool
--- evalBool op x y =
---     Debug.todo "Bool operations"
--- Automatically initialize variables to 0
-evalExpr : Context -> Lang.Expr -> Maybe ExprEvaled
+-- Automaticaly initialize to 0
+
+
+evalExpr : Lang.Context -> Lang.Expr -> Maybe ExprEvaled
 evalExpr context expr =
     case expr of
         Lang.Bin op e1 e2 ->
@@ -62,21 +61,17 @@ evalExpr context expr =
                     Nothing
 
         Lang.Var name ->
-            Maybe.map EvaledInt <| Dict.get name context
+            Just <| EvaledInt <| Maybe.withDefault 0 <| Lang.get name context
 
         Lang.Num x ->
             Just <| EvaledInt <| x
-
-
-type alias Context =
-    Dict.Dict String Int
 
 
 
 -- Abort semantics is not good
 
 
-assign : Context -> String -> Lang.Expr -> Maybe ( String, Int )
+assign : Lang.Context -> String -> Lang.Expr -> Maybe ( String, Int )
 assign context var expr =
     case evalExpr context expr of
         Just (EvaledInt x) ->
@@ -86,35 +81,44 @@ assign context var expr =
             Nothing
 
 
-evalSimple : Lang.SimpleStatement -> Context -> Context
-evalSimple statement context =
-    case statement of
-        Lang.Skip ->
-            context
-
-        Lang.Abort ->
-            Dict.empty
-
-        Lang.Assignment vars vals ->
-            Dict.union (Dict.fromList <| List.filterMap identity <| List.map2 (assign context) vars vals) context
-
-
-eval : Lang.Statement -> Context -> Context
+eval : Lang.Statement -> Lang.Context -> Maybe Lang.Context
 eval statement context =
     case statement of
+        Lang.Skip ->
+            Just context
+
+        Lang.Abort ->
+            Nothing
+
+        Lang.Assignment vars vals ->
+            List.map2 (assign context) vars vals
+                |> List.filterMap identity
+                |> Lang.context
+                |> Lang.overwrite context
+                |> Just
+
         Lang.Seq statements ->
-            List.foldr evalSimple context statements
+            List.foldr (\st -> Maybe.andThen (eval st)) (Just context) statements
 
         Lang.Do guards ->
-            List.filterMap (validGuards context) guards |> List.head
-                |> Maybe.map (\st -> eval st context) |> Maybe.withDefault context
+            List.filterMap (validGuards context) guards
+                |> List.head
+                |> Maybe.andThen (\st -> eval st context)
+                |> Maybe.andThen (\new -> eval (Lang.Do guards) new)
+                |> Maybe.withDefault context
+                |> Just
 
         Lang.If guards ->
-            List.filterMap (validGuards context) guards |> List.head
-                |> Maybe.map (\st -> eval st context) |> Maybe.withDefault Dict.empty
+            List.filterMap (validGuards context) guards
+                |> List.head
+                |> Maybe.andThen (\st -> eval st context)
 
-validGuards : Context -> Lang.Guard -> Maybe Lang.Statement
+
+validGuards : Lang.Context -> Lang.Guard -> Maybe Lang.Statement
 validGuards context (Lang.Guard expr statements) =
     case evalExpr context expr of
-        Just (EvaledBool True) -> Just statements
-        _ -> Nothing
+        Just (EvaledBool True) ->
+            Just statements
+
+        _ ->
+            Nothing

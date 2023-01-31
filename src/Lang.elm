@@ -1,14 +1,23 @@
 module Lang exposing (..)
+-- TODO andThen for checks
 
-import Parser exposing ((|.), (|=), Parser, Step(..), Trailing(..), loop, number, oneOf, spaces, succeed, symbol, lazy)
+import Dict
+import Parser exposing ((|.), (|=), Parser, Step(..), Trailing(..), lazy, loop, number, oneOf, spaces, succeed, symbol)
 import Set
 
-
-
--- Expr
-
 type Operator
-    = Add | Sub | Mul | Div | Les | Grt | Leq | Geq | Neq | Eq
+    = Add
+    | Sub
+    | Mul
+    | Div
+    | Les
+    | Grt
+    | Leq
+    | Geq
+    | Neq
+    | Eq
+
+
 operators : List ( Operator, String )
 operators =
     [ ( Mul, "*" )
@@ -23,13 +32,17 @@ operators =
     , ( Eq, "=" )
     ]
 
+
 type Expr
     = Bin Operator Expr Expr
     | Var String
     | Num Int
 
+
 getOpSymb : Operator -> Maybe String
-getOpSymb op = operators |> List.filter (\(x, _) -> x == op) |> List.head |> Maybe.map Tuple.second
+getOpSymb op =
+    operators |> List.filter (\( x, _ ) -> x == op) |> List.head |> Maybe.map Tuple.second
+
 
 show : Expr -> String
 show expr =
@@ -42,8 +55,6 @@ show expr =
 
         Bin op a b ->
             "(" ++ show a ++ (getOpSymb op |> Maybe.withDefault "???") ++ show b ++ ")"
-
-
 
 
 type alias SepList a sep =
@@ -73,7 +84,12 @@ sepCombine ops =
     sepReverse >> sepFoldl combine
 
 
-step : List (sep, a) -> a -> Maybe sep -> Step (List (sep, a)) (SepList a sep)
+sepBy : String -> Parser keep -> Parser (List keep)
+sepBy sep parser =
+    Parser.map (\( x, xs ) -> x :: List.map Tuple.second xs) <| chain parser (symbol sep)
+
+
+step : List ( sep, a ) -> a -> Maybe sep -> Step (List ( sep, a )) (SepList a sep)
 step revOps expr nextOp =
     case nextOp of
         Nothing ->
@@ -92,18 +108,15 @@ chain parseA parseB =
                 |. spaces
                 |= oneOf
                     [ succeed Just
-                        |. spaces
                         |= parseB
                         |. spaces
                     , succeed Nothing
                     ]
 
 
-
 operator : Parser Operator
 operator =
     oneOf <| List.map (\( op, symb ) -> succeed op |. symbol symb) operators
-
 
 
 variable : Parser String
@@ -129,8 +142,8 @@ atom =
             |= variable
         ]
 
--- use andThen for checks
--- List.foldl (\ops -> Parser.map (sepCombine ops)) (chain atom operator) operators |> andThen notEmpty
+
+
 expression : Parser Expr
 expression =
     chain atom operator
@@ -139,40 +152,42 @@ expression =
         |> Parser.map (sepCombine <| [ Les, Grt, Leq, Geq, Neq, Eq ])
         |> Parser.map Tuple.first
 
-
-
--- Statement
-
-
 type Guard
     = Guard Expr Statement
 
-
-type SimpleStatement
+type Statement
     = Skip
     | Abort
     | Assignment (List String) (List Expr)
-
-
-type Statement
-    = Seq (List SimpleStatement)
+    | Seq (List Statement)
     | Do (List Guard)
     | If (List Guard)
 
-sepBy : String -> Parser keep -> Parser (List keep)
-sepBy sep parser =
-    Parser.map (\( x, xs ) -> x :: List.map Tuple.second xs) <| chain parser (symbol sep)
 
 guard : Parser Guard
 guard =
-    succeed Guard |=  expression |. spaces |. symbol "~>" |. spaces |= lazy (\_ -> statement)
+    succeed Guard |= expression |. spaces |. symbol "~>" |. spaces |= lazy (\_ -> statement)
 
 
-simpleStatement : Parser SimpleStatement
-simpleStatement =
+statementSimple : Parser Statement
+statementSimple =
     oneOf
         [ succeed Skip |. symbol "skip" |. spaces
         , succeed Abort |. symbol "abort" |. spaces
+        , succeed Do
+            |. symbol "do"
+            |. spaces
+            |= sepBy "|" guard
+            |. spaces
+            |. symbol "od"
+            |. spaces
+        , succeed If
+            |. symbol "if"
+            |. spaces
+            |= sepBy "|" guard
+            |. spaces
+            |. symbol "fi"
+            |. spaces
         , succeed Assignment
             |= sepBy "," variable
             |. spaces
@@ -180,14 +195,38 @@ simpleStatement =
             |. spaces
             |= sepBy "," expression
             |. spaces
-        ]
+        ] -- |. spaces -- remove spaces from every other
+
 
 statement : Parser Statement
 statement =
-    oneOf
-        [ succeed Seq |= sepBy ";" simpleStatement
-        , succeed Do
-            |. symbol "do" |. spaces |= sepBy "|" guard |. spaces |. symbol "od"
-        , succeed If
-            |. symbol "if" |. spaces |= sepBy "|" guard |. spaces |. symbol "fi"
-        ]
+    succeed Seq |= sepBy ";" statementSimple
+
+
+parse : String -> Result (List Parser.DeadEnd) Statement
+parse =
+    Parser.run statement
+
+
+parseExpr : String -> Result (List Parser.DeadEnd) Expr
+parseExpr =
+    Parser.run expression
+
+
+type alias Context =
+    Dict.Dict String Int
+
+
+context : List ( String, Int ) -> Context
+context =
+    Dict.fromList
+
+
+get : String -> Context -> Maybe Int
+get =
+    Dict.get
+
+
+overwrite : Context -> Context -> Context
+overwrite c1 c2 =
+    Dict.union c2 c1
