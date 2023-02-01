@@ -142,6 +142,12 @@ atom =
             }
         , succeed Var
             |= variable
+        , succeed identity
+            |. symbol "("
+            |. spaces
+            |= Parser.lazy (\_ -> expression)
+            |. spaces
+            |. symbol ")"
         ]
 
 
@@ -220,7 +226,9 @@ parseExpr =
     Parser.run (expression |. Parser.end)
 
 
-type alias State = (Dict.Dict String Int)
+type alias State =
+    Dict.Dict String Int
+
 
 type Context
     = Halt
@@ -233,13 +241,19 @@ context =
 
 
 get : String -> State -> Maybe Int
-get name state = Dict.get name state
+get name state =
+    Dict.get name state
+
 
 andThen : (State -> Context) -> Context -> Context
-andThen f cont = case cont of
+andThen f cont =
+    case cont of
         Active state ->
             f state
-        Halt -> Halt
+
+        Halt ->
+            Halt
+
 
 mapActive : (State -> State) -> Context -> Context
 mapActive f cont =
