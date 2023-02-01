@@ -10,6 +10,7 @@ import Html.Attributes as HA
 import Lang
 import Parser
 import Task
+import Parser exposing (Problem(..))
 -- import Html.Events as HE
 
 
@@ -70,11 +71,25 @@ viewContext context =
             [ HA.style "border" "none"
             , HA.style "color" "#888"
             , HA.style "list-style" "none"
+            , HA.style "width" "6em"
             ]
             [ Html.text <| "⚡State: "
-            , Html.select [] []
+            -- , Html.select [] []
             ]
         ]
+
+
+problemToString : Parser.Problem -> String
+problemToString problem = case problem of
+    ExpectingInt -> "Expecting number like `13`"
+    ExpectingVariable -> "Expecting variable like `x`"
+    ExpectingSymbol symbol -> "Expecting symbol `" ++ symbol ++ "`" 
+    ExpectingKeyword keyword -> "Expecting keyword `" ++ keyword ++ "`"
+    ExpectingEnd -> "Expecting End. Did you forget to add `;`?"
+    UnexpectedChar -> "Character not recognised"
+    Problem msg -> msg
+    err -> "Unknown error: " ++ Debug.toString err
+
 
 
 viewParsingError : Parser.DeadEnd -> Html Editor.Msg
@@ -85,11 +100,20 @@ viewParsingError { col, problem, row } =
         -- , HE.onMouseOver <| Editor.Hover <| Editor.HoverChar { line = 0, column = 3 }
         ]
         [ Html.text <|
-            String.fromInt col
+                -- Debug.toString problem
+                problemToString problem
+        , Html.mark
+            [ HA.style "color" "#888"
+            , HA.style "background" "none"
+            , HA.style "padding" "1em"
+            ]
+            [ Html.text <|
+                "["
+                ++ String.fromInt col
                 ++ ","
                 ++ String.fromInt row
-                ++ ": "
-                ++ Debug.toString problem
+                ++ "]"
+            ]
         ]
 
 
