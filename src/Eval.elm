@@ -81,39 +81,48 @@ assign state var expr =
             Nothing
 
 
+
 eval : Lang.Statement -> Lang.Context -> Lang.Context
-eval st = Lang.andThen (evalInState st)
+eval = evalLimited 1000
 
-evalInState : Lang.Statement -> Lang.State -> Lang.Context
-evalInState statement state =
-    case statement of
-        Lang.Skip ->
-            Lang.Active state
+evalLimited : Int -> Lang.Statement -> Lang.Context -> Lang.Context
+evalLimited limit st =
+    Lang.andThen (evalInState limit st)
 
-        Lang.Abort ->
-            Lang.Halt
+evalInState : Int -> Lang.Statement -> Lang.State -> Lang.Context
+evalInState limit statement state =
+    if limit < 0 then
+        Lang.Halt
 
-        Lang.Assignment vars vals ->
-            List.map2 (assign state) vars vals
-                |> List.filterMap identity
-                |> Dict.fromList
-                |> Lang.overwrite state
+    else
+        case statement of
+            Lang.Skip ->
+                Lang.Active state
 
-        Lang.Seq statements ->
-            List.foldr (\st -> Lang.andThen (evalInState st)) (Lang.Active state) statements
+            Lang.Abort ->
+                Lang.Halt
 
-        Lang.Do guards ->
-            List.filterMap (validGuards state) guards
-                |> List.head
-                |> Maybe.map (\st -> evalInState st state)
-                |> Maybe.map (\new -> eval (Lang.Do guards) new)
-                |> Maybe.withDefault (Lang.Active state)
+            Lang.Assignment vars vals ->
+                List.map2 (assign state) vars vals
+                    |> List.filterMap identity
+                    |> Dict.fromList
+                    |> Lang.overwrite state
 
-        Lang.If guards ->
-            List.filterMap (validGuards state) guards
-                |> List.head
-                |> Maybe.map (\st -> evalInState st state)
-                |> Maybe.withDefault Lang.Halt
+            Lang.Seq statements ->
+                List.foldr (\st -> Lang.andThen (evalInState (limit - 1) st)) (Lang.Active state) statements
+
+            Lang.Do guards ->
+                List.filterMap (validGuards state) guards
+                    |> List.head
+                    |> Maybe.map (\st -> evalInState (limit - 1) st state)
+                    |> Maybe.map (\new -> evalLimited (limit - 2) (Lang.Do guards) new)
+                    |> Maybe.withDefault (Lang.Active state)
+
+            Lang.If guards ->
+                List.filterMap (validGuards state) guards
+                    |> List.head
+                    |> Maybe.map (\st -> evalInState (limit - 1) st state)
+                    |> Maybe.withDefault Lang.Halt
 
 
 validGuards : Lang.State -> Lang.Guard -> Maybe Lang.Statement

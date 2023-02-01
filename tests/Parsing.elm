@@ -89,6 +89,16 @@ statementTest =
                             ]
                         )
             )
+        , test "fuzzy"
+            (\_ ->
+                Lang.parse "skip2 := 3"
+                    |> Expect.err
+                    -- |> Expect.equal
+                    --     (Seq
+                    --         [ Assignment [ "skip2" ] [ Num 3 ]
+                    --         ]
+                    --     )
+            )
 
         -- , test "x := 1; do x < 3 ~> x := x+1 od"
         --     (\_ ->

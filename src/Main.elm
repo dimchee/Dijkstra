@@ -10,7 +10,7 @@ import Html.Attributes as HA
 import Lang
 import Parser
 import Task
-import Html.Events as HE
+-- import Html.Events as HE
 
 
 main : Program () Editor.Model Editor.Msg
@@ -60,19 +60,18 @@ viewContext context =
     Html.details
         [ HA.style "cursor" "pointer"
         , HA.style "box-shadow" "3px 3px 4px black"
-        , HA.style "background-color" "#ddd"
+        , HA.style "background-color" "#f0f0f0"
 
-        -- , HA.style "width" "30em"
         , HA.style "margin" "0.5em"
         , HA.style "padding" "0.2em 1em"
         ]
         [ fromContext (Html.text "Halted") viewState context
         , Html.summary
             [ HA.style "border" "none"
-            , HA.style "color" "#B22222"
+            , HA.style "color" "#888"
             , HA.style "list-style" "none"
             ]
-            [ Html.text <| "State: "
+            [ Html.text <| "⚡State: "
             , Html.select [] []
             ]
         ]
@@ -99,9 +98,7 @@ viewParsingErrors errors =
     Html.details
         [ HA.style "cursor" "pointer"
         , HA.style "box-shadow" "3px 3px 4px black"
-        , HA.style "background-color" "#ddd"
-
-        -- , HA.style "width" "30em"
+        , HA.style "background-color" "#f0f0f0"
         , HA.style "margin" "0.5em"
         , HA.style "padding" "0.2em 1em"
         ]
@@ -109,10 +106,10 @@ viewParsingErrors errors =
         , Html.summary
             [ HA.style "width" "15em"
             , HA.style "border" "none"
-            , HA.style "color" "#B22222"
+            , HA.style "color" "#888"
             , HA.style "list-style" "none"
             ]
-            [ Html.text <| "Error parsing, posibilities: " ++ (errors |> List.length |> String.fromInt)
+            [ Html.text <| "⚠️ Error parsing " ++ (errors |> List.length |> String.fromInt) ++ " posibilities"
             ]
         ]
 
@@ -146,11 +143,12 @@ viewResultsAndErrors model =
                 |> Result.map (\statement -> Lang.context [] |> Eval.eval statement)
     in
     Html.div
-        [-- [ HA.style "display" "flex"
-         -- , HA.style "flex-direction" "vertical"
+        [ HA.style "display" "flex"
+        , HA.style "flex-direction" "vertical"
+        , HA.style "justify-content" "center"
         ]
-        [ res |> Result.withDefault (Lang.context []) |> viewContext
-        , res |> errorOr [] |> viewParsingErrors
+        [ Html.div [] [ res |> Result.withDefault (Lang.context []) |> viewContext, Html.div [] [] ]
+        , Html.div [] [ res |> errorOr [] |> viewParsingErrors, Html.div [] [] ]
         ]
 
 
@@ -168,9 +166,13 @@ view : Editor.Model -> Browser.Document Editor.Msg
 view model =
     { title = "Dijkstra's Legacy"
     , body =
-        [ Editor.view model
-        , viewResultsAndErrors model
+        [ Html.div
+            [ HA.style "margin" "10em"
+            ]  
+            [ Editor.view model
+            , viewResultsAndErrors model
+            ]
 
         --, Editor.viewDebug model
-        ]
+        ] 
     }
