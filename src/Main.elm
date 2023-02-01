@@ -8,9 +8,11 @@ import Eval
 import Html exposing (Html)
 import Html.Attributes as HA
 import Lang
-import Parser
-import Task
 import Parser exposing (Problem(..))
+import Task
+
+
+
 -- import Html.Events as HE
 
 
@@ -62,7 +64,6 @@ viewContext context =
         [ HA.style "cursor" "pointer"
         , HA.style "box-shadow" "3px 3px 4px black"
         , HA.style "background-color" "#f0f0f0"
-
         , HA.style "margin" "0.5em"
         , HA.style "padding" "0.2em 1em"
         ]
@@ -74,34 +75,49 @@ viewContext context =
             , HA.style "width" "6em"
             ]
             [ Html.text <| "⚡State: "
+
             -- , Html.select [] []
             ]
         ]
 
 
 problemToString : Parser.Problem -> String
-problemToString problem = case problem of
-    ExpectingInt -> "Expecting number like `13`"
-    ExpectingVariable -> "Expecting variable like `x`"
-    ExpectingSymbol symbol -> "Expecting symbol `" ++ symbol ++ "`" 
-    ExpectingKeyword keyword -> "Expecting keyword `" ++ keyword ++ "`"
-    ExpectingEnd -> "Expecting End. Did you forget to add `;`?"
-    UnexpectedChar -> "Character not recognised"
-    Problem msg -> msg
-    err -> "Unknown error: " ++ Debug.toString err
+problemToString problem =
+    case problem of
+        ExpectingNumber ->
+            "Expecting number like `13`"
 
+        ExpectingVariable ->
+            "Expecting variable like `x`"
+
+        ExpectingSymbol symbol ->
+            "Expecting symbol `" ++ symbol ++ "`"
+
+        ExpectingKeyword keyword ->
+            "Expecting keyword `" ++ keyword ++ "`"
+
+        ExpectingEnd ->
+            "Expecting End. Did you forget to add `;`?"
+
+        UnexpectedChar ->
+            "Character not recognised"
+
+        Problem msg ->
+            msg
+
+        err ->
+            "Unknown error: " ++ Debug.toString err
 
 
 viewParsingError : Parser.DeadEnd -> Html Editor.Msg
 viewParsingError { col, problem, row } =
     Html.li
-        [
-        -- [ HE.onClick <| Editor.GoToPosition { line = row, column = col }
-        -- , HE.onMouseOver <| Editor.Hover <| Editor.HoverChar { line = 0, column = 3 }
+        [-- [ HE.onClick <| Editor.GoToPosition { line = row, column = col }
+         -- , HE.onMouseOver <| Editor.Hover <| Editor.HoverChar { line = 0, column = 3 }
         ]
         [ Html.text <|
-                -- Debug.toString problem
-                problemToString problem
+            -- Debug.toString problem
+            problemToString problem
         , Html.mark
             [ HA.style "color" "#888"
             , HA.style "background" "none"
@@ -109,10 +125,10 @@ viewParsingError { col, problem, row } =
             ]
             [ Html.text <|
                 "["
-                ++ String.fromInt col
-                ++ ","
-                ++ String.fromInt row
-                ++ "]"
+                    ++ String.fromInt col
+                    ++ ","
+                    ++ String.fromInt row
+                    ++ "]"
             ]
         ]
 
@@ -192,11 +208,11 @@ view model =
     , body =
         [ Html.div
             [ HA.style "margin" "10em"
-            ]  
+            ]
             [ Editor.view model
             , viewResultsAndErrors model
             ]
 
         --, Editor.viewDebug model
-        ] 
+        ]
     }
