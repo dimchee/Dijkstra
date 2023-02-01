@@ -71,8 +71,8 @@ evalExpr state expr =
 -- Abort semantics is not good
 
 
-assign : Lang.State -> String -> Lang.Expr -> Maybe ( String, Int )
-assign state var expr =
+assign : Lang.State -> (String, Lang.Expr) -> Maybe ( String, Int )
+assign state (var, expr) =
     case evalExpr state expr of
         Just (EvaledInt x) ->
             Just ( var, x )
@@ -102,8 +102,8 @@ evalInState limit statement state =
             Lang.Abort ->
                 Lang.Halt
 
-            Lang.Assignment vars vals ->
-                List.map2 (assign state) vars vals
+            Lang.Assignment xs ->
+                List.map (assign state) xs
                     |> List.filterMap identity
                     |> Dict.fromList
                     |> Lang.overwrite state

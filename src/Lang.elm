@@ -167,7 +167,7 @@ type Guard
 type Statement
     = Skip
     | Abort
-    | Assignment (List String) (List Expr)
+    | Assignment (List ( String, Expr ))
     | Seq (List Statement)
     | Do (List Guard)
     | If (List Guard)
@@ -197,14 +197,35 @@ statementSimple =
             |. spaces
             |. symbol "fi"
             |. spaces
-        , succeed Assignment
-            |= sepBy "," variable
-            |. spaces
-            |. symbol ":="
-            |. spaces
-            |= sepBy "," expression
-            |. spaces
+        , assignment
+
+        -- , succeed Assignment
+        --     |= sepBy "," variable
+        --     |. spaces
+        --     |. symbol ":="
+        --     |. spaces
+        --     |= sepBy "," expression
+        --     |. spaces
         ]
+
+
+assignment : Parser Statement
+assignment =
+    succeed Tuple.pair
+        |= sepBy "," variable
+        |. spaces
+        |. symbol ":="
+        |. spaces
+        |= sepBy "," expression
+        |. spaces
+        |> Parser.andThen
+            (\( vars, vals ) ->
+                if List.length vars == List.length vals then
+                    succeed <| Assignment <| List.map2 Tuple.pair vars vals
+
+                else
+                    Parser.problem "different number of variables and values"
+            )
 
 
 

@@ -15,7 +15,7 @@ parseExpr =
 
 parse : String -> Lang.Statement
 parse =
-    Lang.parse >> Result.withDefault (Assignment [ "error" ] [ Var "error" ])
+    Lang.parse >> Result.withDefault (Assignment [ ("error", Var "error") ])
 
 
 sepTest : Test
@@ -73,8 +73,8 @@ statementTest =
                 parse "a := 3; b := 4"
                     |> Expect.equal
                         (Seq
-                            [ Assignment [ "b" ] [ Num 4 ]
-                            , Assignment [ "a" ] [ Num 3 ]
+                            [ Assignment [ ("b", Num 4) ]
+                            , Assignment [ ("a", Num 3) ]
                             ]
                         )
             )
